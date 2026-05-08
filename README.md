@@ -1,85 +1,135 @@
+<div align="center">
+
+<img src="transcriptarr.ico" alt="Transcriptarr" width="128" />
+
 # Transcriptarr
 
-Local audio transcription with speaker labels. Runs entirely on your computer, no audio is ever sent to a cloud service.
+**Local audio transcription with speaker labels.**
+Runs entirely on your computer. No cloud, no API keys, no subscription.
 
-Built on [WhisperX](https://github.com/m-bain/whisperX) (transcription) and [pyannote.audio](https://github.com/pyannote/pyannote-audio) (speaker diarization), wrapped in a modern [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) UI.
+![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![GPU](https://img.shields.io/badge/GPU-CUDA%20%7C%20CPU-76B900)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
-![status](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)
-![python](https://img.shields.io/badge/python-3.11-blue)
-
----
-
-## Quick install (Windows)
-
-1. Go to the [Releases page](https://github.com/Rusty-Meat/transcriptarr/releases) and download the latest **`Transcriptarr.exe`**.
-2. Double-click it.
-3. Windows will probably show **"Windows protected your PC"**. This is normal for unsigned hobby apps. Click **More info → Run anyway**. *(See [Why does Windows warn me?](#why-does-windows-warn-me) for details.)*
-4. The setup wizard will guide you through the rest:
-   - Picks an install folder (defaults to `%LOCALAPPDATA%\Transcriptarr`, no admin needed).
-   - Detects whether you have an NVIDIA GPU and installs the right PyTorch wheel.
-   - Downloads about 1 GB (CPU only) or 4 GB (GPU). Mostly PyTorch.
-   - Optionally takes a HuggingFace token so speaker labels work.
-   - Optionally creates desktop / Start Menu shortcuts.
-5. When the wizard finishes, the app launches automatically.
-
-After install, just run `Transcriptarr.exe` (or the shortcut). It skips the wizard and goes straight to the app.
+</div>
 
 ---
 
-## What you get
+> [!TIP]
+> **Drag a file. Click Transcribe. Get a transcript.** That's the whole UX.
+> Behind the scenes: WhisperX + pyannote, running in a venv on your machine, talking to nothing.
 
-- Drag any audio or video file onto the window (`.m4a`, `.mp3`, `.wav`, `.flac`, `.mp4`, `.mkv`, and lots more)
-- Whisper model size selector: `tiny` / `base` / `small` / `medium` / `large-v2` / `large-v3`
-- Optional speaker labels (`[SPEAKER 1]: ...`)
-- GPU/CPU dropdown so you can switch between fast and battery-saving modes
-- Save transcript as `.md` or copy to clipboard
-- Live progress bar with ETA
-- 8 themes, both dark and light variants for each
-- Logs to `%LOCALAPPDATA%\Transcriptarr\logs\` for debugging
-- Fully offline after the one-time model download
+## 📸 Screenshots
 
----
+![Main window](docs/screenshots/main-window.png)
+<sub>*The main window after transcribing a clip. Indigo cosmic-purple dark theme is the default.*</sub>
 
-## System requirements
+### First-run setup wizard
 
-- **Windows 10 or 11** (64-bit). The bundled installer is Windows-only.
-- **About 5 GB of free disk space** (PyTorch + Whisper models + ffmpeg).
-- **NVIDIA GPU optional but recommended** for speed. Without one the app runs on CPU. Works fine, just slower.
-- **Internet connection** for the initial download. After that, the app runs offline.
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/wizard-welcome.png" alt="Wizard welcome" /><br/><sub><i>Welcome — what the wizard does and roughly how long it takes.</i></sub></td>
+<td width="50%"><img src="docs/screenshots/wizard-system-check.png" alt="System check" /><br/><sub><i>Detects Python, ffmpeg, and NVIDIA GPU. Anything missing gets installed in the next step.</i></sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/wizard-options.png" alt="Install options" /><br/><sub><i>Pick the install folder and choose CPU or GPU.</i></sub></td>
+<td width="50%"><img src="docs/screenshots/wizard-install.png" alt="Install in progress" /><br/><sub><i>Live install progress with a verbose activity log so you can see exactly what's happening.</i></sub></td>
+</tr>
+</table>
 
-The wizard handles installing Python, ffmpeg, PyTorch, and WhisperX for you. You don't need any of those installed beforehand.
+### Themes
 
----
+![Settings - themes](docs/screenshots/settings-themes.png)
+<sub>*Settings dialog with the theme picker. Eight themes, each with light and dark variants. Pick from cosmic Indigo, Forest, Sunset, Slate, Tidal, Mocha, Nord, or Crimson.*</sub>
 
-## Speaker labels (optional setup)
+## ✨ What you get
 
-If you want `[SPEAKER 1]:` / `[SPEAKER 2]:` labels in your transcripts, you need a free HuggingFace token AND you have to accept the user conditions on three pyannote model pages. The setup wizard walks you through this. If you skip it, transcription still works, just without labels.
+| | |
+|---|---|
+| 🎙️ | Drag and drop any audio or video (`.m4a`, `.mp3`, `.wav`, `.flac`, `.mp4`, `.mkv`, lots more) |
+| 🧠 | Whisper models from `tiny` to `large-v3` &mdash; pick speed vs. accuracy |
+| 👥 | Optional speaker labels (`[SPEAKER 1]: ...`) via pyannote |
+| ⚡ | NVIDIA GPU support for fast transcription, CPU fallback when there's no GPU |
+| 🎨 | 8 themes, each with light + dark variants. Indigo cosmic-purple is the default |
+| 💾 | Export as `.md`, copy to clipboard, drag-resize the window, the usual things |
+| 🔌 | Fully offline after first run. Models cache locally and never re-download |
+| 📜 | Logs to `%LOCALAPPDATA%\Transcriptarr\logs\` so when something breaks, you can see why |
 
-The three model pages that need acceptance:
+## 🚀 Quick install (Windows)
+
+1. Grab the latest **`Transcriptarr.exe`** from the [Releases page](https://github.com/Rusty-Meat/transcriptarr/releases)
+2. Double-click it
+3. Windows SmartScreen will probably show **"Windows protected your PC"**. Normal for unsigned hobby apps. Click **More info → Run anyway**
+4. The setup wizard takes it from there:
+
+```
+Welcome  ->  Detect what's missing  ->  Install location & device choice
+                       |
+                       v
+        Download & install (~1 GB on CPU, ~4 GB on GPU)
+                       |
+                       v
+   HuggingFace token (optional)  ->  Pyannote ToS  ->  Shortcuts  ->  Done
+```
+
+After install, just run `Transcriptarr.exe` (or the desktop shortcut). It skips the wizard and goes straight to the app.
+
+## 🖥️ System requirements
+
+- **Windows 10 or 11** (64-bit)
+- **~5 GB free disk space** (PyTorch is the heavy one)
+- **NVIDIA GPU optional** — without one the app runs on CPU. Works fine, just 5–15× slower depending on model size
+- **Internet for the initial download.** After that, fully offline
+
+You don't need Python, ffmpeg, PyTorch, or anything else pre-installed. The wizard fetches everything.
+
+## 👥 Speaker labels (optional setup)
+
+Want `[SPEAKER 1]:` / `[SPEAKER 2]:` in your transcripts? You'll need a free HuggingFace token AND you have to click "Agree" on three pyannote model pages. The wizard walks you through it. Skip it if you don't need labels — transcription still works without them.
+
+<details>
+<summary>The three pyannote pages you need to accept</summary>
 
 - [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0)
 - [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
 - [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1)
 
-You can re-open the app's **Settings** dialog later to paste your token if you skipped during setup.
+You only have to accept once per HuggingFace account. After that the models download on first use of speaker diarization and are cached in `~/.cache/huggingface/`.
 
----
+If you skipped the wizard's token step, you can paste it later from the app's **Settings** dialog.
+</details>
 
-## GPU support
+## 🔄 Updates
 
-If you have an NVIDIA GPU with current drivers, the wizard installs the CUDA build of PyTorch automatically. The app shows `Device: GPU` in green.
+Drop `update.exe` is bundled with `Transcriptarr.exe` and ends up in your install folder. Run it whenever you want to:
 
-If your GPU isn't detected (no NVIDIA card, missing/old driver, laptop with discrete GPU disabled, etc.), the wizard falls back to the CPU build. The app shows `Device: CPU` in amber. You can still transcribe; it's just much slower (often 5x to 15x slower than GPU on the same model size).
+- 🔍 **Check for a new version** — auto-runs at launch, hits the GitHub API, tells you what's available
+- ⬆️ **Install the update** — downloads the new code, backs up your current version, swaps it in. Five clearly-labeled steps with a verbose log so you can see exactly what's happening
+- 🩹 **Repair a broken install** — verifies ffmpeg, the venv, and key Python packages. Fixes anything missing
 
-If you have an NVIDIA card but it's not detected, install the latest driver from [nvidia.com/Download](https://www.nvidia.com/Download/index.aspx) and re-run the wizard.
+No need to come back to GitHub manually. The app phones home (just to check version, that's it) only when you open `update.exe`.
 
----
+## 🎨 Themes
 
-## Running from source (developers)
+8 themes, each with a `dark` and `light` palette. Switch via **Settings → Theme** (changes apply on Save).
 
-If you'd rather not use the .exe:
+| Theme | Vibe |
+|---|---|
+| **Indigo** *(default)* | Cosmic purple accent. Dark = ink on midnight indigo. Light = soft cream paper |
+| **Forest** | Cool greens, gentle and natural |
+| **Sunset** | Warm peach/orange, golden hour energy |
+| **Slate** | Clean neutral, like Linear or Notion. The "professional" pick |
+| **Tidal** | Deep ocean teal-cyan |
+| **Mocha** | Coffee shop browns. Cozy alternative to Sunset |
+| **Nord** | The famous Polar Night palette, beloved by devs |
+| **Crimson** | Wine red on parchment, library / study mood |
 
-```bat
+## 🛠️ Run from source (developers)
+
+If you'd rather skip the .exe and run the app yourself:
+
+```bash
 git clone https://github.com/Rusty-Meat/transcriptarr.git
 cd transcriptarr
 
@@ -94,72 +144,90 @@ pip install customtkinter tkinterdnd2 hf_xet
 python transcriptarr.py
 ```
 
-For CPU-only:
-```bat
+For CPU only, swap the torch line for the CPU index:
+
+```bash
 pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 ```
 
-You'll also need [ffmpeg](https://www.gyan.dev/ffmpeg/builds/) somewhere on your PATH.
+You'll also need [ffmpeg](https://www.gyan.dev/ffmpeg/builds/) somewhere on your `PATH`.
 
----
+### Building the .exe yourself
 
-## Troubleshooting
+```bash
+pip install pyinstaller
+build.bat
+```
 
-### Why does Windows warn me?
+Outputs `dist\update.exe` and `dist\Transcriptarr.exe`. The wizard will pick up your icon (`transcriptarr.ico`) automatically.
 
-The first time you run `Transcriptarr.exe`, Windows SmartScreen will show a blue dialog: **"Windows protected your PC"** with a Don't run button. This is because the executable isn't signed with a paid Authenticode certificate. To run it anyway:
+## 🐛 Troubleshooting
 
-1. Click **More info** under the title
-2. Click **Run anyway** at the bottom
+<details>
+<summary>Why does Windows warn me when I run the .exe?</summary>
 
-This is a one-time prompt per machine. After that, Windows trusts it.
+Windows SmartScreen flags unsigned executables. `Transcriptarr.exe` is unsigned because code signing certificates cost money this project doesn't have yet. Click **More info → Run anyway** the first time. After that Windows trusts it.
 
-If you're concerned about safety, the entire source code is in this repo, the build pipeline runs publicly via [GitHub Actions](https://github.com/Rusty-Meat/transcriptarr/actions) (see `.github/workflows/release.yml`), and you can also run from source as shown above. Code signing via SignPath Foundation is on the roadmap and will be enabled once the project is enrolled.
+If you're concerned, the entire source code is in this repo and the build pipeline runs publicly via [GitHub Actions](https://github.com/Rusty-Meat/transcriptarr/actions). You can also build from source and skip the .exe entirely.
+</details>
 
-### "ffmpeg not found" / "could not decode the audio file"
+<details>
+<summary>"ffmpeg not found" / "could not decode the audio file"</summary>
 
-Setup should have downloaded ffmpeg into `<install folder>\ffmpeg\bin\`. The app prepends that to PATH when it launches. If it's missing, run `update.exe` (when available) or rerun the wizard via `Transcriptarr.exe --force-wizard` from a command prompt.
+Setup downloads ffmpeg into `<install folder>\ffmpeg\bin\`. The app prepends that to PATH at launch. If it's missing, run `update.exe` and click **Repair installation**.
+</details>
 
-### Diarization fails with `401` or `Repository not found`
+<details>
+<summary>Diarization fails with 401 / 403 / Repository not found</summary>
 
-Either your HuggingFace token is missing/wrong, or you didn't accept the user conditions on all three pyannote pages. Open the app's **Settings**, paste your token, and visit all three URLs to click "Agree". See [Speaker labels](#speaker-labels-optional-setup) above.
+Either your HuggingFace token is wrong, or you didn't accept the user conditions on all three pyannote pages. Open the app's **Settings**, paste your token, and visit all three URLs to click "Agree". See [Speaker labels](#-speaker-labels-optional-setup) above for the URLs.
+</details>
 
-### Out of GPU memory
+<details>
+<summary>Out of GPU memory</summary>
 
-Use a smaller Whisper model (`small` or `medium`) or switch to CPU via the dropdown. Large models need ~10 GB of VRAM.
+Use a smaller Whisper model (`small` or `medium`) or switch to CPU via the **Device** dropdown. Large models need ~10 GB of VRAM.
+</details>
 
-### App launches the wizard every time
+<details>
+<summary>The wizard runs every time I open Transcriptarr.exe</summary>
 
-The tracker file at `%APPDATA%\Transcriptarr\install.json` got deleted or corrupted. Re-running `Transcriptarr.exe` will rebuild it through the wizard. Existing files in the install folder are reused.
+The tracker file at `%APPDATA%\Transcriptarr\install.json` got deleted or corrupted. Re-running the wizard rebuilds it; pip skips already-installed packages so it's fast.
+</details>
 
-### Where do I find logs?
+<details>
+<summary>Where do I find the logs?</summary>
 
-- Setup logs: `%APPDATA%\Transcriptarr\setup.log`
-- App logs: `%LOCALAPPDATA%\Transcriptarr\logs\transcriptarr.log` (or whatever folder you chose during install)
+- **Setup logs:** `%APPDATA%\Transcriptarr\setup.log`
+- **App logs:** `<install folder>\logs\transcriptarr.log` (or whichever folder you chose during install)
+- **Updater logs:** `%APPDATA%\Transcriptarr\update.log`
 
-Send the most recent log when reporting a bug.
+When reporting a bug, attach the most recent log.
+</details>
 
-### How do I uninstall?
+<details>
+<summary>How do I uninstall?</summary>
 
-The wizard doesn't ship an uninstaller yet. Manually:
+There's no automatic uninstaller yet. Manually:
 
 1. Delete the install folder (default: `%LOCALAPPDATA%\Transcriptarr\`)
-2. Delete `%APPDATA%\Transcriptarr\` (tracker, setup logs)
+2. Delete `%APPDATA%\Transcriptarr\` (tracker, logs)
 3. Delete the desktop / Start Menu shortcuts you created
-4. Optionally delete model caches: `%USERPROFILE%\.cache\huggingface\`
+4. Optionally delete model caches at `%USERPROFILE%\.cache\huggingface\`
 
-Or run from a command prompt: `Transcriptarr.exe --uninstall`. This just removes the tracker so a re-run shows the wizard again.
+Or run `Transcriptarr.exe --uninstall` from a command prompt to just remove the tracker (so a re-run shows the wizard again).
+</details>
 
----
+## 🙏 Credits
 
-## License
+Built on the shoulders of:
 
-TBD.
+- [WhisperX](https://github.com/m-bain/whisperX) by Max Bain et al. — alignment + diarization scaffolding
+- [pyannote.audio](https://github.com/pyannote/pyannote-audio) by Hervé Bredin et al. — speaker diarization
+- [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) by Tom Schimansky — modern Tk widgets
+- [tkinterdnd2](https://github.com/pmgagne/tkinterdnd2) — drag-and-drop bindings for Tk
+- [ffmpeg-builds](https://www.gyan.dev/ffmpeg/builds/) by gyan.dev — Windows ffmpeg static builds
 
-## Credits
+## 📜 License
 
-- [WhisperX](https://github.com/m-bain/whisperX) by Max Bain et al.
-- [pyannote.audio](https://github.com/pyannote/pyannote-audio) by Hervé Bredin et al.
-- [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) by Tom Schimansky
-- [tkinterdnd2](https://github.com/pmgagne/tkinterdnd2) for drag-and-drop
-- [ffmpeg-builds](https://www.gyan.dev/ffmpeg/builds/) by gyan.dev
+MIT
