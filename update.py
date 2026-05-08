@@ -215,9 +215,13 @@ def download_with_progress(url: str, dest: Path, on_progress) -> None:
 
 def apply_app_update(install_dir: Path, zipball_url: str,
                      tag_name: str, on_status) -> None:
-    """Download the GitHub release source zip, extract transcriptarr.py and
-    transcriptarr.ico, and replace the local copies (with backups)."""
-    on_status(f"Downloading source archive for {tag_name}...")
+    """Download the release source archive, extract the app file(s), and
+    swap them into the install folder. Creates .bak backups so a bad update
+    can be rolled back manually."""
+    on_status("")
+    on_status(f"Step 1/5: Downloading source archive for release {tag_name}.")
+    on_status("(This is the small zip GitHub builds for every tag, ~1-2 MB. "
+              "It contains the new transcriptarr.py we'll swap in.)")
     tmp_zip = TRACKER_DIR / "downloads" / f"{tag_name}.zip"
 
     def progress(done, total):
@@ -225,8 +229,10 @@ def apply_app_update(install_dir: Path, zipball_url: str,
             on_status(f"   {done // 1024} KB / {total // 1024} KB")
 
     download_release_zip(zipball_url, tmp_zip, progress)
+    on_status(f"Saved archive to {tmp_zip}")
 
-    on_status("Extracting transcriptarr.py from archive...")
+    on_status("")
+    on_status("Step 2/5: Extracting transcriptarr.py from the archive.")
     new_py = None
     new_ico = None
     with zipfile.ZipFile(tmp_zip) as zf:
@@ -234,8 +240,10 @@ def apply_app_update(install_dir: Path, zipball_url: str,
             base = Path(name).name
             if base == "transcriptarr.py" and new_py is None:
                 new_py = zf.read(name)
+                on_status(f"   found {name} ({len(new_py)} bytes)")
             elif base == "transcriptarr.ico" and new_ico is None:
                 new_ico = zf.read(name)
+                on_status(f"   found {name} ({len(new_ico)} bytes)")
             if new_py and new_ico:
                 break
 
@@ -248,25 +256,40 @@ def apply_app_update(install_dir: Path, zipball_url: str,
     target_py  = install_dir / "transcriptarr.py"
     backup_py  = install_dir / "transcriptarr.py.bak"
 
+    on_status("")
+    on_status("Step 3/5: Backing up your current copy.")
+    on_status("(Saved as transcriptarr.py.bak in the install folder. "
+              "If anything looks wrong after the update you can rename it "
+              "back to restore the old version.)")
     if target_py.exists():
-        on_status("Backing up current transcriptarr.py -> transcriptarr.py.bak")
         shutil.copy2(target_py, backup_py)
+        on_status(f"   backed up to {backup_py.name}")
+    else:
+        on_status("   (no existing transcriptarr.py to back up)")
 
+    on_status("")
+    on_status("Step 4/5: Writing the new transcriptarr.py.")
     target_py.write_bytes(new_py)
-    on_status(f"Replaced {target_py.name}")
+    on_status(f"   wrote {len(new_py)} bytes to {target_py}")
 
     if new_ico:
         target_ico = install_dir / "transcriptarr.ico"
         if target_ico.exists():
             shutil.copy2(target_ico, install_dir / "transcriptarr.ico.bak")
+            on_status(f"   backed up icon to transcriptarr.ico.bak")
         target_ico.write_bytes(new_ico)
-        on_status("Updated transcriptarr.ico")
+        on_status(f"   wrote new transcriptarr.ico ({len(new_ico)} bytes)")
 
-    # Persist new version in the tracker
+    on_status("")
+    on_status("Step 5/5: Updating the install tracker.")
+    on_status("(Writes the new version number to install.json so this "
+              "updater knows you're now on the latest release.)")
     t = load_tracker()
     t["version"] = tag_name.lstrip("vV")
     TRACKER_FILE.write_text(json.dumps(t, indent=2), encoding="utf-8")
-    on_status(f"Updated tracker to version {t['version']}")
+    on_status(f"   tracker now says version = {t['version']}")
+    on_status("")
+    on_status(f"Update to {tag_name} complete. Restart Transcriptarr to use it.")
 
 
 # Repair -----------------------
@@ -326,21 +349,31 @@ def check_install_health(install_dir: Path) -> dict[str, tuple[bool, str]]:
 
 
 def repair_install(install_dir: Path, on_status) -> None:
-    """Try to fix anything that's broken."""
-    on_status("Running diagnostics...")
+    """Verify each component the app needs and fix anything missing or broken."""
+    on_status("")
+    on_status("Running diagnostics on your install.")
+    on_status("(Checking that the install folder, app files, ffmpeg, the "
+              "Python venv, and required packages are all present and intact.)")
     health = check_install_health(install_dir)
 
     for component, (ok, detail) in health.items():
-        marker = "OK" if ok else "MISSING"
-        on_status(f"   [{marker}] {component}: {detail}")
+        marker = "OK     " if ok else "MISSING"
+        on_status(f"   [{marker}] {component:14s} -> {detail}")
 
     if all(ok for ok, _ in health.values()):
+        on_status("")
         on_status("Everything looks healthy. No repair needed.")
         return
 
+    on_status("")
+    on_status("Some components are broken. Fixing them now.")
+
     # ffmpeg
     if not health["ffmpeg"][0]:
-        on_status("Re-downloading ffmpeg...")
+        on_status("")
+        on_status("Re-downloading ffmpeg.")
+        on_status("(ffmpeg is what decodes m4a/mp3/wav/etc. before transcription. "
+                  "Without it the app can't open audio files.)")
         target = install_dir / "ffmpeg"
         zip_path = install_dir / "downloads" / "ffmpeg.zip"
 
@@ -371,7 +404,11 @@ def repair_install(install_dir: Path, on_status) -> None:
     # Packages
     if not health["packages"][0] and health["venv"][0]:
         venv_python = install_dir / ".venv" / "Scripts" / "python.exe"
-        on_status("Re-installing missing Python packages...")
+        on_status("")
+        on_status("Re-installing missing Python packages.")
+        on_status("(One or more of torch / whisperx / customtkinter / "
+                  "tkinterdnd2 was missing from the venv. Re-running pip "
+                  "install will fetch fresh copies.)")
         # Torch flavour (CUDA vs CPU) was decided during the original install
         # and recorded in install.json; reuse the same wheels here.
         cmd = [str(venv_python), "-m", "pip", "install", "--no-cache-dir",
