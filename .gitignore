@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# PyInstaller artifacts
+build/
+dist/
+*.spec.bak
+*.py.bak
+
+# Local config and secrets
+.transcriptarr.json
+.hf_token
+
+# Local install tracker (only shows up if someone runs the wizard from
+# inside the source folder during development)
+install.json
+
+# Development scratch
+icon-source.png
+icon-source.jpg
+icon-source.jpeg
+icon-source.webp
+icon-source.bmp
+icon-debug-*.png
+
+# Source images for icon (regenerate from your master file)
+# Comment this out if you want to commit transcriptarr.ico:
+# transcriptarr.ico
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editor folders
+.vscode/
+.idea/
+*.swp
+
+# Logs (in case anyone runs from this folder)
+logs/
+*.log
