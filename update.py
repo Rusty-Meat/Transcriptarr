@@ -37,6 +37,41 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 
+# Suppress the cmd-window flash and the PyInstaller env-leak issue when
+# launching subprocesses from a windowed .exe on Windows.
+_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+
+
+def _clean_subprocess_env():
+    """Strip PyInstaller-injected env vars before spawning child Python."""
+    env = os.environ.copy()
+    for key in (
+        "__PYVENV_LAUNCHER__",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONSTARTUP",
+        "_PYI_APPLICATION_HOME_DIR",
+        "_MEIPASS",
+        "_MEIPASS2",
+    ):
+        env.pop(key, None)
+    return env
+
+
+def _sp_run(*args, **kwargs):
+    if sys.platform == "win32":
+        kwargs.setdefault("creationflags", _NO_WINDOW)
+    kwargs.setdefault("env", _clean_subprocess_env())
+    return subprocess.run(*args, **kwargs)
+
+
+def _sp_popen(*args, **kwargs):
+    if sys.platform == "win32":
+        kwargs.setdefault("creationflags", _NO_WINDOW)
+    kwargs.setdefault("env", _clean_subprocess_env())
+    return subprocess.Popen(*args, **kwargs)
+
+
 # Constants (kept in sync with wizard.py - if you change one, change both)
 
 APP_NAME    = "Transcriptarr"

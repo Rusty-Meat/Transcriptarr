@@ -45,15 +45,44 @@ import customtkinter as ctk
 _NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
+def _clean_subprocess_env():
+    """Strip env vars that PyInstaller's bundle injects which would otherwise
+    confuse a spawned Python interpreter.
+
+    When this wizard runs as a PyInstaller .exe, it sets variables like
+    __PYVENV_LAUNCHER__, _MEIPASS, and _PYI_APPLICATION_HOME_DIR that are
+    used by the bundled Python runtime to locate its own files. If we
+    inherit those into a child python.exe (e.g. the freshly-installed
+    Python or a venv's python.exe), the child uses them too and ends up
+    looking for stdlib next to wherever Transcriptarr.exe was launched
+    from instead of next to its own python.exe. That breaks venv
+    creation and pip with cryptic "No module named encodings" errors.
+    """
+    env = os.environ.copy()
+    for key in (
+        "__PYVENV_LAUNCHER__",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONSTARTUP",
+        "_PYI_APPLICATION_HOME_DIR",
+        "_MEIPASS",
+        "_MEIPASS2",
+    ):
+        env.pop(key, None)
+    return env
+
+
 def _sp_run(*args, **kwargs):
     if sys.platform == "win32":
         kwargs.setdefault("creationflags", _NO_WINDOW)
+    kwargs.setdefault("env", _clean_subprocess_env())
     return subprocess.run(*args, **kwargs)
 
 
 def _sp_popen(*args, **kwargs):
     if sys.platform == "win32":
         kwargs.setdefault("creationflags", _NO_WINDOW)
+    kwargs.setdefault("env", _clean_subprocess_env())
     return subprocess.Popen(*args, **kwargs)
 
 
