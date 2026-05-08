@@ -919,9 +919,23 @@ class WizardApp(ctk.CTk):
         self.next_btn.grid(row=0, column=2)
 
     def _build_screens(self) -> None:
-        self.screens: list[ctk.CTkFrame] = []
+        # Wrap each screen in a scrollable frame so the wizard stays usable
+        # when the window is shrunk below a screen's natural height. The
+        # install screen is the one exception: it relies on row weight to
+        # let its activity-log textbox fill available space, and its log
+        # already has its own scrollbar, so we leave it alone.
+        self.screens: list = []
         for builder_name in self.SCREEN_BUILDERS:
-            frame = ctk.CTkFrame(self.body, fg_color="transparent")
+            if builder_name == "_build_install":
+                frame = ctk.CTkFrame(self.body, fg_color="transparent")
+            else:
+                frame = ctk.CTkScrollableFrame(
+                    self.body,
+                    fg_color="transparent",
+                    corner_radius=0,
+                    scrollbar_button_color=COLOR_BORDER,
+                    scrollbar_button_hover_color=COLOR_TEXT_DIM,
+                )
             getattr(self, builder_name)(frame)
             self.screens.append(frame)
 
