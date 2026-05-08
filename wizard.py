@@ -274,6 +274,17 @@ def _download_with_progress(url: str, dest: Path, on_progress) -> None:
 
 def install_python(install_dir: Path, on_progress, on_status) -> Path:
     """Returns the path to a Python 3.11 executable, downloading if needed."""
+    # Idempotency check: if a previous wizard run already installed Python
+    # at our target location, reuse it. The Microsoft Python installer
+    # silently exits on a re-run when the target dir already has files,
+    # leaving the wizard thinking the install failed.
+    target = install_dir / f"python{PYTHON_VERSION.replace('.', '')[:3]}"
+    target_python = target / "python.exe"
+    if target_python.exists():
+        on_status(f"Reusing previously-installed Python at {target_python}")
+        LOG.info("Reusing bundled Python: %s", target_python)
+        return target_python
+
     sys_python = find_system_python311()
     if sys_python:
         on_status(f"Using existing Python 3.11 at {sys_python}")
@@ -284,7 +295,6 @@ def install_python(install_dir: Path, on_progress, on_status) -> Path:
     installer = install_dir / "downloads" / f"python-{PYTHON_VERSION}-amd64.exe"
     _download_with_progress(PYTHON_INSTALLER_URL, installer, on_progress)
 
-    target = install_dir / f"python{PYTHON_VERSION.replace('.', '')[:3]}"
     on_status(f"Installing Python {PYTHON_VERSION} to {target}...")
     # Silent install, no admin, no PATH pollution, no Store, no docs.
     cmd = [
@@ -1161,7 +1171,7 @@ class WizardApp(ctk.CTk):
                 "install_dir": str(install_dir),
                 "python_exe": str(python_exe),
                 "use_gpu": self.use_gpu_var.get(),
-                "version": "1.0.1",
+                "version": "1.0.2",
             })
 
             Q.put(("done", str(install_dir)))
