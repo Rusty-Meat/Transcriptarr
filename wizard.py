@@ -203,18 +203,118 @@ def has_nvidia_gpu() -> tuple[bool, str]:
         return False, f"detection failed: {e}"
 
 
+def _python311_registry_path(hive_name: str) -> Path | None:
+    """Read the Python 3.11 InstallPath from a single registry hive.
+
+    Returns the python.exe path the registry claims is there. Caller is
+    responsible for checking whether it actually exists on disk.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        import winreg
+    except ImportError:
+        return None
+    hive = winreg.HKEY_CURRENT_USER if hive_name == "HKCU" else winreg.HKEY_LOCAL_MACHINE
+    try:
+        with winreg.OpenKey(hive, r"Software\Python\PythonCore\3.11\InstallPath") as k:
+            install_path, _ = winreg.QueryValueEx(k, None)
+        return Path(install_path) / "python.exe"
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        LOG.warning("Reading %s Python 3.11 registry failed: %s", hive_name, e)
+        return None
+
+
 def find_system_python311() -> Path | None:
-    """Use py launcher to locate any Python 3.11 already installed."""
+    """Find a usable Python 3.11 already on the system.
+
+    Checks the registry directly first (works even when py.exe launcher
+    isn't installed), then falls back to the py launcher. Orphan registry
+    entries (where the install path is registered but python.exe is gone)
+    are skipped so the wizard knows it has to do a fresh install.
+    """
+    for hive_name in ("HKCU", "HKLM"):
+        candidate = _python311_registry_path(hive_name)
+        if candidate is None:
+            continue
+        if candidate.exists():
+            LOG.info("Found Python 3.11 via %s registry: %s", hive_name, candidate)
+            return candidate
+        LOG.warning(
+            "%s registry points to missing %s (orphan entry from a deleted install)",
+            hive_name, candidate,
+        )
+
+    # Fall back to py launcher. It can find installs registered in places
+    # we didn't check (uncommon, but possible).
     try:
         r = _sp_run(
             ["py", "-3.11", "-c", "import sys; print(sys.executable)"],
             capture_output=True, text=True, timeout=5,
         )
         if r.returncode == 0:
-            return Path(r.stdout.strip())
+            candidate = Path(r.stdout.strip())
+            if candidate.exists():
+                return candidate
     except Exception:
         pass
     return None
+
+
+def _delete_registry_tree(hive, subkey: str) -> None:
+    """Delete a registry key and all its subkeys. Raises on failure."""
+    import winreg
+    try:
+        with winreg.OpenKey(hive, subkey, 0, winreg.KEY_ALL_ACCESS) as k:
+            while True:
+                try:
+                    name = winreg.EnumKey(k, 0)
+                except OSError:
+                    break
+                _delete_registry_tree(k, name)
+    except FileNotFoundError:
+        return
+    winreg.DeleteKey(hive, subkey)
+
+
+def cleanup_orphan_python311_registry() -> bool:
+    """Remove HKCU Python 3.11 registry entries that point to missing files.
+
+    The Python installer treats any registered 3.11 install as "already
+    present" and silently switches to Modify mode when run with /quiet,
+    even if the actual files have been deleted. Removing the orphan
+    entry forces it back into Install mode on the next run.
+
+    Only HKCU is touched - HKLM cleanup would need admin and we don't
+    want to risk it.
+
+    Returns True if anything was removed.
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        import winreg
+    except ImportError:
+        return False
+
+    candidate = _python311_registry_path("HKCU")
+    if candidate is None:
+        return False
+    if candidate.exists():
+        return False  # Real install, leave it alone.
+
+    LOG.warning("Cleaning orphan Python 3.11 registry entry (path %s missing)", candidate)
+    try:
+        _delete_registry_tree(
+            winreg.HKEY_CURRENT_USER, r"Software\Python\PythonCore\3.11"
+        )
+        LOG.info("Removed HKCU\\Software\\Python\\PythonCore\\3.11")
+        return True
+    except Exception as e:
+        LOG.warning("Failed to remove orphan registry entry: %s", e)
+        return False
 
 
 def has_ffmpeg() -> bool:
@@ -320,6 +420,14 @@ def install_python(install_dir: Path, on_progress, on_status) -> Path:
         LOG.info("Using system Python: %s", sys_python)
         return sys_python
 
+    # Some users have an orphan Python 3.11 registry entry from a previous
+    # install whose files were deleted. The Microsoft Python bundle reads
+    # that registry, decides Python is already installed, and silently
+    # switches to Modify mode under /quiet - exiting without touching our
+    # TargetDir. Clean that up before we try to install.
+    if cleanup_orphan_python311_registry():
+        on_status("Cleaned up an orphan Python 3.11 registry entry from a previous install.")
+
     on_status(f"Downloading Python {PYTHON_VERSION} installer...")
     installer = install_dir / "downloads" / f"python-{PYTHON_VERSION}-amd64.exe"
     _download_with_progress(PYTHON_INSTALLER_URL, installer, on_progress)
@@ -347,7 +455,37 @@ def install_python(install_dir: Path, on_progress, on_status) -> Path:
 
     py = target / "python.exe"
     if not py.exists():
-        raise RuntimeError(f"Python install reported success but {py} not found.")
+        # Installer reported success but didn't produce a python.exe in our
+        # target dir. This almost always means an existing Python 3.11
+        # registration (often from a manual install whose files were later
+        # deleted) caused the bundle to switch to Modify mode. Try cleaning
+        # the registry one more time and retry.
+        on_status("Installer didn't produce python.exe; checking for stale Python registration...")
+        if cleanup_orphan_python311_registry():
+            on_status("Removed stale registry entry; retrying install...")
+            LOG.info("Retrying Python install after registry cleanup")
+            r = _sp_run(cmd, capture_output=True, text=True)
+            if r.returncode == 0 and py.exists():
+                LOG.info("Retry succeeded: %s", py)
+                return py
+
+        # Last-resort: maybe a real Python 3.11 install reappeared after the
+        # initial check (or an HKLM one we can't clean). Use it if so.
+        sys_python = find_system_python311()
+        if sys_python is not None:
+            on_status(f"Falling back to existing Python at {sys_python}")
+            return sys_python
+
+        raise RuntimeError(
+            f"Python {PYTHON_VERSION} installer reported success but {py} was not "
+            f"created. This usually means another Python 3.11 install is "
+            f"registered on your system (sometimes only as a leftover registry "
+            f"entry from a previous install).\n\n"
+            f"To fix this manually:\n"
+            f"  1. Run the installer at {installer}\n"
+            f"  2. If it offers Repair/Modify/Uninstall, click Uninstall\n"
+            f"  3. Re-run Transcriptarr.exe"
+        )
     return py
 
 
@@ -699,6 +837,11 @@ class WizardApp(ctk.CTk):
         self.shortcut_desktop_var = tk.BooleanVar(value=True)
         self.shortcut_start_var   = tk.BooleanVar(value=True)
         self.tos_acknowledged_var = tk.BooleanVar(value=False)
+        # Advanced install opt-outs. Default is to install both - users with
+        # an existing system Python or ffmpeg can untick on the system check
+        # screen to make the wizard skip those steps entirely.
+        self.install_python_var   = tk.BooleanVar(value=True)
+        self.install_ffmpeg_var   = tk.BooleanVar(value=True)
 
         # System detection result, populated by _build_system_check on entry
         self.detection: dict[str, tuple[bool, str]] = {}
@@ -974,6 +1117,71 @@ class WizardApp(ctk.CTk):
         )
         self.nvidia_hint.grid(sticky="ew", pady=(12, 0))
 
+        # Advanced install: optional opt-out of bundled Python / ffmpeg.
+        # Hidden behind a caret toggle so the screen stays uncluttered for
+        # users who don't need it.
+        self._advanced_open = False
+        self.advanced_toggle_btn = ctk.CTkButton(
+            parent,
+            text="▶  Advanced install",
+            command=self._toggle_advanced_install,
+            font=self.ui_font_bold,
+            height=32, corner_radius=6,
+            fg_color="transparent", hover_color=COLOR_PANEL,
+            text_color=COLOR_TEXT_DIM, anchor="w",
+            border_width=0,
+        )
+        self.advanced_toggle_btn.grid(sticky="ew", pady=(20, 4))
+
+        self.advanced_frame = ctk.CTkFrame(
+            parent, fg_color=COLOR_PANEL, corner_radius=8,
+        )
+        self.advanced_frame.grid_columnconfigure(0, weight=1)
+        # Built but not gridded - shown only when the toggle is open.
+
+        ctk.CTkLabel(
+            self.advanced_frame, justify="left", anchor="w", wraplength=680,
+            font=self.ui_font, text_color=COLOR_TEXT_DIM,
+            text=(
+                "Already have Python 3.11 or ffmpeg installed somewhere on this "
+                "machine? Untick the boxes below and the wizard will skip those "
+                "downloads and use what you've already got. Leave them ticked "
+                "(the default) and the wizard installs isolated copies into "
+                "your install folder so it doesn't touch your system."
+            ),
+        ).grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 8))
+
+        ctk.CTkCheckBox(
+            self.advanced_frame, text="Install Python 3.11",
+            variable=self.install_python_var,
+            font=self.ui_font, text_color=COLOR_TEXT,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HVR,
+            border_color=COLOR_BORDER, border_width=2, corner_radius=4,
+            checkbox_width=20, checkbox_height=20,
+        ).grid(row=1, column=0, sticky="w", padx=14, pady=4)
+
+        ctk.CTkCheckBox(
+            self.advanced_frame, text="Install ffmpeg",
+            variable=self.install_ffmpeg_var,
+            font=self.ui_font, text_color=COLOR_TEXT,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HVR,
+            border_color=COLOR_BORDER, border_width=2, corner_radius=4,
+            checkbox_width=20, checkbox_height=20,
+        ).grid(row=2, column=0, sticky="w", padx=14, pady=(4, 12))
+
+    def _toggle_advanced_install(self) -> None:
+        self._advanced_open = not self._advanced_open
+        if self._advanced_open:
+            self.advanced_toggle_btn.configure(
+                text="▼  Advanced install", text_color=COLOR_TEXT,
+            )
+            self.advanced_frame.grid(sticky="ew", pady=(0, 8))
+        else:
+            self.advanced_toggle_btn.configure(
+                text="▶  Advanced install", text_color=COLOR_TEXT_DIM,
+            )
+            self.advanced_frame.grid_remove()
+
     def _refresh_system_check(self) -> None:
         # Run synchronously - all checks are fast
         py = find_system_python311()
@@ -1171,13 +1379,38 @@ class WizardApp(ctk.CTk):
             def progress(done: int, total: int) -> None:
                 Q.put(("progress", (done, total)))
 
-            # 1. Python
-            Q.put(("stage", "Setting up Python..."))
-            python_exe = install_python(install_dir, progress, status)
+            # 1. Python (skippable via Advanced install)
+            if self.install_python_var.get():
+                Q.put(("stage", "Setting up Python..."))
+                python_exe = install_python(install_dir, progress, status)
+            else:
+                Q.put(("stage", "Locating existing Python..."))
+                status("Skip box ticked - looking for an existing Python 3.11...")
+                python_exe = find_system_python311()
+                if python_exe is None:
+                    raise RuntimeError(
+                        "You unchecked 'Install Python 3.11' under Advanced install, "
+                        "but no existing Python 3.11 was found on this machine. "
+                        "Either re-run the wizard and leave that box ticked, or "
+                        "install Python 3.11 from python.org first and try again."
+                    )
+                status(f"Using existing Python at {python_exe}")
 
-            # 2. ffmpeg
-            Q.put(("stage", "Installing ffmpeg..."))
-            install_ffmpeg(install_dir, progress, status)
+            # 2. ffmpeg (skippable via Advanced install)
+            if self.install_ffmpeg_var.get():
+                Q.put(("stage", "Installing ffmpeg..."))
+                install_ffmpeg(install_dir, progress, status)
+            else:
+                Q.put(("stage", "Skipping ffmpeg install..."))
+                status("Skip box ticked - checking PATH for ffmpeg...")
+                if not has_ffmpeg():
+                    raise RuntimeError(
+                        "You unchecked 'Install ffmpeg' under Advanced install, "
+                        "but ffmpeg was not found on PATH. Either re-run the "
+                        "wizard and leave that box ticked, or install ffmpeg "
+                        "yourself and add it to your PATH first."
+                    )
+                status("Using existing ffmpeg from PATH.")
 
             # 3. venv
             Q.put(("stage", "Creating virtual environment..."))
@@ -1200,7 +1433,7 @@ class WizardApp(ctk.CTk):
                 "install_dir": str(install_dir),
                 "python_exe": str(python_exe),
                 "use_gpu": self.use_gpu_var.get(),
-                "version": "1.0.2",
+                "version": "1.0.3",
             })
 
             Q.put(("done", str(install_dir)))
