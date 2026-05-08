@@ -4,8 +4,10 @@
 
 # Transcriptarr
 
-**Local audio transcription with speaker labels.**
-Runs entirely on your computer. No cloud, no API keys, no subscription.
+Drop any audio or video file, get a transcript with speaker labels. <br/>
+Transcriptarr runs Whisper and pyannote locally on your CPU or GPU, so your audio stays on your computer. <br/>
+**No cloud uploads. No per-minute fees. No file-size caps. No subscription.** <br/>
+The only optional account is a free HuggingFace token, and only if you want speaker labels.
 
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
@@ -15,10 +17,6 @@ Runs entirely on your computer. No cloud, no API keys, no subscription.
 </div>
 
 ---
-
-> [!TIP]
-> **Drag a file. Click Transcribe. Get a transcript.** That's the whole UX.
-> Behind the scenes: WhisperX + pyannote, running in a venv on your machine, talking to nothing.
 
 ## 📸 Screenshots
 
@@ -102,7 +100,7 @@ If you skipped the wizard's token step, you can paste it later from the app's **
 
 ## 🔄 Updates
 
-Drop `update.exe` is bundled with `Transcriptarr.exe` and ends up in your install folder. Run it whenever you want to:
+`update.exe` is bundled inside `Transcriptarr.exe` and gets copied into your install folder during setup. Run it whenever you want to:
 
 - 🔍 **Check for a new version** — auto-runs at launch, hits the GitHub API, tells you what's available
 - ⬆️ **Install the update** — downloads the new code, backs up your current version, swaps it in. Five clearly-labeled steps with a verbose log so you can see exactly what's happening
