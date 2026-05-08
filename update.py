@@ -330,7 +330,7 @@ def check_install_health(install_dir: Path) -> dict[str, tuple[bool, str]]:
         missing: list[str] = []
         for pkg in REQUIRED_PACKAGES:
             try:
-                r = subprocess.run(
+                r = _sp_run(
                     [str(venv_python), "-c", f"import {pkg}"],
                     capture_output=True, text=True, timeout=20,
                 )
@@ -413,8 +413,8 @@ def repair_install(install_dir: Path, on_status) -> None:
         # and recorded in install.json; reuse the same wheels here.
         cmd = [str(venv_python), "-m", "pip", "install", "--no-cache-dir",
                *REQUIRED_PACKAGES]
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8", errors="replace")
+        proc = _sp_popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, encoding="utf-8", errors="replace")
         for line in proc.stdout or []:
             line = line.rstrip()
             LOG.debug(line)

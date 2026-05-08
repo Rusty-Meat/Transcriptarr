@@ -40,6 +40,23 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 
+# Suppress the cmd-window flash when launching subprocesses from a windowed
+# .exe on Windows.
+_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+
+
+def _sp_run(*args, **kwargs):
+    if sys.platform == "win32":
+        kwargs.setdefault("creationflags", _NO_WINDOW)
+    return subprocess.run(*args, **kwargs)
+
+
+def _sp_popen(*args, **kwargs):
+    if sys.platform == "win32":
+        kwargs.setdefault("creationflags", _NO_WINDOW)
+    return subprocess.Popen(*args, **kwargs)
+
+
 # Constants
 
 APP_NAME           = "Transcriptarr"
@@ -144,7 +161,7 @@ LOG = _setup_logging("--debug" in sys.argv)
 def has_nvidia_gpu() -> tuple[bool, str]:
     """Return (has_gpu, gpu_name_or_reason)."""
     try:
-        r = subprocess.run(
+        r = _sp_run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             capture_output=True, text=True, timeout=5,
         )
@@ -160,7 +177,7 @@ def has_nvidia_gpu() -> tuple[bool, str]:
 def find_system_python311() -> Path | None:
     """Use py launcher to locate any Python 3.11 already installed."""
     try:
-        r = subprocess.run(
+        r = _sp_run(
             ["py", "-3.11", "-c", "import sys; print(sys.executable)"],
             capture_output=True, text=True, timeout=5,
         )
@@ -223,7 +240,7 @@ def launch_installed_app() -> bool:
     if sys.platform == "win32":
         # CREATE_NO_WINDOW = 0x08000000
         flags = 0x08000000
-    subprocess.Popen(
+    _sp_popen(
         [str(venv_python), str(app_script)],
         cwd=str(install_dir), env=env, creationflags=flags,
     )
@@ -282,7 +299,7 @@ def install_python(install_dir: Path, on_progress, on_status) -> Path:
         "AssociateFiles=0",
     ]
     LOG.info("Running: %s", " ".join(cmd))
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = _sp_run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(
             f"Python installer failed (exit {r.returncode}):\n"
@@ -343,7 +360,7 @@ def create_venv(python_exe: Path, install_dir: Path, on_status) -> Path:
 
     on_status("Creating virtual environment...")
     LOG.info("python -m venv -> %s", venv_dir)
-    r = subprocess.run(
+    r = _sp_run(
         [str(python_exe), "-m", "venv", str(venv_dir)],
         capture_output=True, text=True,
     )
@@ -357,7 +374,7 @@ def create_venv(python_exe: Path, install_dir: Path, on_status) -> Path:
 
     # Make sure pip is up to date inside the venv
     on_status("Bootstrapping pip in venv...")
-    subprocess.run(
+    _sp_run(
         [str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
         capture_output=True, text=True,
     )
@@ -380,7 +397,7 @@ def pip_install(venv_python: Path, args: list[str], on_status,
     label = label or " ".join(a for a in args if not a.startswith("--"))[:80]
     on_status(f"pip install: {label}")
 
-    proc = subprocess.Popen(
+    proc = _sp_popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace", bufsize=1,
     )
@@ -561,7 +578,7 @@ def create_shortcut(target_path: Path, lnk_path: Path, args: str = "",
     if icon and icon.exists():
         ps += f"$s.IconLocation = '{icon}'; "
     ps += "$s.Save()"
-    r = subprocess.run(
+    r = _sp_run(
         ["powershell", "-NoProfile", "-Command", ps],
         capture_output=True, text=True,
     )
@@ -1144,7 +1161,7 @@ class WizardApp(ctk.CTk):
                 "install_dir": str(install_dir),
                 "python_exe": str(python_exe),
                 "use_gpu": self.use_gpu_var.get(),
-                "version": "1.0.0",
+                "version": "1.0.1",
             })
 
             Q.put(("done", str(install_dir)))
